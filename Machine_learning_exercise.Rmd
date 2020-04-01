@@ -1,0 +1,140 @@
+---
+title: "Practical machine learning project"
+author: "Vimala"
+date: "30/03/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## 1. Executive summary:
+The objective of this exercise is to predict the manner a given weight lifter performed the execrcise. The manner by which the exercise is done is bucketed under 5 categories A, B, C, D and E. This is represented by "classe" variable. The given dataset had numerous predictor variables. The variables were different quality measures indicating the way the exercise was done.  After data cleansing, a list 52 variables were used for prediction. For this scope of exercise, two machine learning methods: 1. Classification tree and 2. Random forest were explored. Between the two models, random forest model provided about overall 99% accuracy.   
+
+## 2. Load input data and load required libraries
+
+```{r load dataset}
+library(caret)
+library(rattle)
+library(kernlab)
+DataInput <- read.csv("C:/Users/Vimala.Chakravarthy/Desktop/Vimala/Training/R/Machine learning/pml-training.csv", header =TRUE)
+#head(DataInput)
+```
+
+## 3. Data quality assessment
+
+# remove first seven columns that carry no value
+It can be seen from the dataset that first seven columns merely provide identification information and would not help much in our prediction
+
+```{r remove unwanted columns}
+DataInputInd <- DataInput[, -c(1:7)]
+#head(DataInputInd)
+dim(DataInputInd)
+```
+
+# remove missing values or columns having NA for 20% of time
+One of the important step in building models is to ensure that the data used for prediction is of good quality. Often, the dataset with missing values produce biased estimates. Among the most popular ways to address missing values problem, i decided to remove the columns with more than 20% missing values. Imputation is not considered because creating proxy for more than 20% of values may again lead to bias. As seen from the results, we still have enough number predictors (52) after removing the columns with missing values. In order to make sure we are not removing meaningful predictors, the accuracy and other performance metrics could be analysed.   
+
+```{r data assessment}
+cols_with_missing_values = which(colSums(is.na(DataInputInd) | DataInputInd == "") > 19622*0.2)
+cols_with_missing_values
+
+TrainData_clean <- DataInputInd[,  -cols_with_missing_values]
+dim(TrainData_clean)
+
+summary(TrainData_clean)
+```
+
+## 4. Model building
+# 4.1 Create datasets for cross validation
+The cross validation is taken care by creating data partition on the original dataset and split it into traning and testing datasets. 3/4 of the data is used to train the model and rest for assessing the model accuracy. 
+
+```{r cross validation}
+inTrain <- createDataPartition(TrainData_clean$classe, p=0.75, list = FALSE)
+
+training <- TrainData_clean[inTrain,]
+testing <- TrainData_clean[-inTrain,]
+
+dim(training)
+dim(testing)
+```
+
+# 4.2 Classification tree
+#4.2.1 Model fit
+#The classification tree algorithm is applied using "rpart" method. 
+```{r rpart model fit}
+modFit <- train(classe~.,method="rpart", data=training)
+print(modFit$finalModel)
+```
+
+#4.2.2 Model prediction 
+```{r model prediction rpart}
+modPred <- predict(modFit, newdata=testing)
+```
+
+#4.2.3 Model accuracy 
+```{r model accuracy rpart}
+confMat <- confusionMatrix(modPred, testing$classe)
+confMat
+```
+As seen from the overall statistics, the model accuracy is 48.5% only. And confusion matrix shows that there were lot of mis-predictions in classe B, C, D and E
+
+# 4.3 Random forest 
+#4.3.1 Model fit
+#The random forest algorithm is applied using "rf" method
+```{r model fit}
+modFitRf <- train(classe~., data=training, method="rf",proxy=TRUE)
+```
+
+# 4.3.2 Random forest model prediction on test data
+```{r model prediction rf}
+modRfPred = predict(modFitRf, newdata=testing)
+```
+
+# 4.3.3. Random forest model accuracy
+```{r model accuracy rf}
+confMatTest <- confusionMatrix(modRfPred, testing$classe)
+confMatTest
+```
+As seen from the results, the random forest model produced about 99% accuracy. 
+
+## 5. Conclusion
+As seen from the accuracy results above, random forest method clearly fare well in predictions in about 99% times. Hence we use the random forest fit for predicting the test questions
+
+## 6. Load data for quiz
+```{r load data for quiz}
+DataTest <- read.csv("C:/Users/Vimala.Chakravarthy/Desktop/Vimala/Training/R/Machine learning/pml-testing.csv", header =TRUE)
+#head(DataTest)
+```
+
+# 6.1 Model predictions
+```{r quiz data predictions}
+modRfpmlTest <- predict(modFitRf, newdata=DataTest)
+modRfpmlTest
+```
+
+## 7.Appendix: Plots and other related diagnosis
+```{r classification tree}
+fancyRpartPlot(modFit$finalModel)
+```
+
+#7.1 correlation test
+```{r correlation test}
+M <- abs(cor(training[,-53]))
+diag(M) <- 0
+which(M>0.8, arr.ind=T)
+```
+
+#7.2 Preprocess test
+```{r preprocess}
+library(caret)
+preProc <- preProcess((training[,-53]+1), method="pca",pcaComp=2)
+trainPC <- predict(preProc, (training[,-53]+1))
+
+typeColor <- ((training$classe=="A")*1+ (training$classe=="B")*2 + (training$classe=="B")* 3 +(training$classe=="D")* 4 +1)
+plot(trainPC[,1], trainPC[,2], col=typeColor)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
